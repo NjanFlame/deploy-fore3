@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  xeloracloud-bot:
+    build: .
+    container_name: xeloracloud-discord-bot
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container management
+      - ./data:/app/data  # Persistent data storage
+      - ./logs:/app/logs  # Log storage
+      - ./.env:/app/.env:ro  # Environment configuration
+    networks:
+      - xeloracloud-management
+    environment:
+      - DOCKER_NETWORK_NAME=xeloracloud-network
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - setup-networks
+    healthcheck:
+      test: ["CMD", "python", "-c", "import discord; print('Bot healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Service to set up Docker networks
+  setup-networks:
+    image: docker:20-cli
+    container_name: xeloracloud-network-setup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: >
+      sh -c "
+        echo 'Setting up XeloraCloud networks...' &&
+        docker network create --driver bridge --subnet=172.20.0.0/16 xeloracloud-network 2>/dev/null || echo 'Network already exists' &&
+        docker network create --driver bridge xeloracloud-management 2>/dev/null || echo 'Management network already exists' &&
+        echo 'Network setup complete'
+      "
+    restart: "no"
+
+networks:
+  xeloracloud-management:
+    external: false
+    driver: bridge
+
+volumes:
+  bot-data:
+    driver: local
+  bot-logs:
+    driver: local
